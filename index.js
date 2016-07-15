@@ -151,10 +151,10 @@ app.post('/search/orbeon/builder', function handleBuilderSearch(req, res, next) 
 });
 
 // Save Form
-app.post();
+//app.post();
 
 // Publish Form
-app.post();
+//app.post();
 
 // Log everything
 app.all('*', function(req, res, next) {
