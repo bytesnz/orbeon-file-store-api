@@ -20,7 +20,10 @@ console.log('folders are', srcFolder, pubFolder);
 
 // Use the simple text body parser for POST requests
 // TODO The request MUST have a Content-Type: application/xml header.
-app.use(bodyParser.text({ type: '*/xml' }));
+app.use(bodyParser.text({
+  type: '*/xml',
+  limit: '10mb'
+}));
 
 // Get form for form builder
 app.get('/crud/orbeon/builder/data/:id/data.xml', function getForm(req, res, next) {
@@ -151,7 +154,7 @@ app.post('/search/orbeon/builder', function handleBuilderSearch(req, res, next) 
 });
 
 // Save Form
-//app.post();
+app.post('/crud/orbeon/builder/data/:id/data.xml', function saveForm(req, res, next) {});
 
 // Publish Form
 //app.post();
