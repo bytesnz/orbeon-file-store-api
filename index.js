@@ -16,15 +16,18 @@ var commander = require('commander')
 
 var access = Promise.denodeify(fs.access);
 var writeFile = Promise.denodeify(fs.writeFile);
+var unlink = Promise.denodeify(fs.unlink);
 
 var app = express();
 var forms;
 
 if (commander.debug) {
-  log.level = 'debug';
+  log.level = 'silly';
 } else if (commander.verbose) {
   log.level = 'verbose';
 }
+
+log.enableColor();
 
 require('promise/lib/rejection-tracking').enable();
 
@@ -42,6 +45,13 @@ app.use(bodyParser.text({
   limit: '10mb'
 }));
 
+// Log everything
+app.all('*', function(req, res, next) {
+  log.verbose(new Date(), 'Got new request', req.method, req.url);
+  log.silly('request parts', req.headers, req.body);
+  next();
+});
+
 // Get form for form builder
 app.get('/crud/orbeon/builder/data/:id/data.xml', function getForm(req, res, next) {
   // Check id is in forms
@@ -52,6 +62,85 @@ app.get('/crud/orbeon/builder/data/:id/data.xml', function getForm(req, res, nex
   } else {
     log.warn('form no exist', req.params.id);
     res.status(404);
+    next();
+  }
+});
+
+// Get published form
+app.get('/crud/:app/:form/form/form.xml', function getForm(req, res, next) {
+  // Check id is in forms
+  log.silly('request for published form', req.params);
+  
+  return (new Promise(function(resolve, reject) {
+    // Look up form id
+    var id = forms.getFormId(req.params.app, req.params.form)
+    if (forms.forms[id]) {
+      log.verbose('form exist', forms.forms[id]);
+      resolve();
+    } else {
+      reject();
+    }
+  })).then(function() {
+    // Check if published file exist
+    var publishedFile = path.join(pubFolder, form['application-name'],
+        form['form-name'], 'form', 'form.xhtml');
+    
+    return access(publishedFile, fs.R_OK).then(function() {
+      log.warn('published form exist', req.params.app, req.params.form);
+      res.sendFile(publishedFile, next);
+      return Promise.resolve();
+    }, function (err) {
+      if (err.code === 'ENOENT') {
+        return Promise.reject(err);
+      } else {
+        log.error(err.message);
+        log.error(err.stack);
+        res.status(500);
+        next();
+        return Promise.resolve();
+      }
+    });
+  }).catch(function(err) {
+    log.warn('published form no exist', req.params.app, req.params.form);
+    res.status(404);
+    next();
+  });
+});
+
+// Delete a form
+app.delete('/crud/orbeon/builder/data/:id/data.xml', function getForm(req, res, next) {
+  var form;
+  // Check id is in forms
+  if ((form = forms.forms[req.params.id])) {
+    unlink(form.file).then(function() {
+      // Check if a published form exists
+      var publishedFile = path.join(pubFolder, form['application-name'],
+          form['form-name'], 'form', 'form.xhtml');
+      return access(publishedFile, fs.W_OK).then(function() {
+        // Delete it
+        return unlink(publishedFile);
+      }, function(err) {
+        if (err.code === 'ENOENT') {
+          return Promise.resolve();
+        } else {
+          return Promise.reject(err);
+        }
+      }).then(function() {
+        log.warn(form['application-name'] + '/' + form['form-name'], 'deleted');
+        forms.deleteMapping(form['application-name'], form['form-name']);
+        delete forms.forms[req.params.id];
+        res.status(201).end();
+        next();
+      });
+    }).catch(function(err) {
+      log.error(err.message);
+      log.error(err.stack);
+      res.status(500).send(err.message);
+      next();
+    });
+  } else {
+    log.warn('form no exist', req.params.id);
+    res.status(400);
     next();
   }
 });
@@ -174,23 +263,34 @@ app.post('/search/orbeon/builder', function handleBuilderSearch(req, res, next) 
 // /crud/orbeon/builder/data/419a29bc6ecad15209dbfdbc7ee6c3f8e53e88e7/data.xml
 app.put('/crud/orbeon/builder/data/:id/data.xml', function saveForm(req, res, next) {
   // Extract the metadata from the new form
+  // TODO Ensure form data is valid?
   return forms.extractMetadata(req.body).then(function(metadata) {
     // Check the folder exists
-    var formPath = path.join(srcFolder, metadata['application-name']);
+    var formPath = path.join(srcFolder, metadata['application-name'],
+        metadata['form-name'] + '.xhtml');
 
-    return access(formPath, fs.W_OK).catch(function appFolderIssue(err) {
+    return access(path.dirname(formPath), fs.W_OK)
+        .then(function appFolderGood() {
+      // Check access to file
+      return access(formPath, fs.W_OK).catch(function(err) {
+        switch(err.code) {
+          case 'ENOENT': // Does not exist
+            // That's fine
+            return Promise.resolve();
+          default:
+            return Promise.reject(err);
+        }
+      });
+    }, function appFolderIssue(err) {
       switch(err.code) {
         case 'ENOENT': // Does not exist
           // Try creating the directory
-          return mkdirp(formPath);
+          return mkdirp(path.dirname(formPath));
         default:
           return Promise.reject(err);
       }
     }).then(function saveHasFolder() {
       var oldId;
-
-      // Save the xml
-      formPath = path.join(formPath, metadata['form-name'] + '.xhtml');
 
       // Check if id is already used
       if (forms.forms[req.params.id]) {
@@ -237,20 +337,56 @@ app.put('/crud/orbeon/builder/data/:id/data.xml', function saveForm(req, res, ne
     });
     next();
   }).catch(function(err) {
-    console.error(err.message, err.stack);
+    log.error(err.message, err.stack);
     res.status(500).send(err.message);
     next();
   })
 });
 
 // Publish Form
-//app.post();
+app.put('/crud/:app/:form/form/form.xhtml', function saveForm(req, res, next) {
+  console.log('got publish of form');
+  // Extract the metadata from the new form
+  return forms.extractMetadata(req.body).then(function(metadata) {
+    // Check the folder exists
+    var publishedFile = path.join(pubFolder, req.params.app,
+        req.params.form, 'form', 'form.xhtml');
 
-// Log everything
-app.all('*', function(req, res, next) {
-  log.verbose(new Date(), 'Got new request', req.method, req.url);
-  log.silly(req.headers, req.body);
-  next();
+    // Check the folder exists first
+    return access(path.dirname(publishedFile), fs.W_OK)
+        .then(function appFolderGood() {
+      // Check access to file
+      return access(publishedFile, fs.W_OK).catch(function(err) {
+        switch(err.code) {
+          case 'ENOENT': // Does not exist
+            // That's fine
+            return Promise.resolve();
+          default:
+            return Promise.reject(err);
+        }
+      });
+    }, function appFolderIssue(err) {
+      switch(err.code) {
+        case 'ENOENT': // Does not exist
+          // Try creating the directory
+          return mkdirp(path.dirname(publishedFile));
+        default:
+          return Promise.reject(err);
+      }
+    }).then(function saveHasFolder() {
+      // TODO do we need to check all the metadata etc?
+      log.info('form', req.params.app + '/'
+          + req.params.form, 'published (' + req.query.document + ')');
+      return writeFile(publishedFile, req.body);
+    }).then(function() {
+      res.status(201).end();
+    });
+    next();
+  }).catch(function(err) {
+    log.error(err.message, err.stack);
+    res.status(500).send(err.message);
+    next();
+  });
 });
 
 require('./lib/forms-watcher')({
@@ -267,5 +403,5 @@ require('./lib/forms-watcher')({
   app.listen('6483');
   log.info('CRUD API instance now listening on 6483');
 }).catch(function(err) {
-  console.error(err.message, error.stack);
+  log.error(err.message, error.stack);
 });
