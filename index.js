@@ -12,6 +12,7 @@ var log = require('npmlog');
 var commander = require('commander')
   .option('-d, --debug', 'Debug logging')
   .option('-v, --verbose', 'Verbose logging')
+  .option('-p, --port [port]', 'Use the given port instead of 6483', 6483)
   .parse(process.argv);
 
 var access = Promise.denodeify(fs.access);
@@ -21,6 +22,7 @@ var unlink = Promise.denodeify(fs.unlink);
 var app = express();
 var forms;
 
+// Setup logging
 if (commander.debug) {
   log.level = 'silly';
 } else if (commander.verbose) {
@@ -28,6 +30,11 @@ if (commander.debug) {
 }
 
 log.enableColor();
+
+if (!(commander.port = parseInt(commander.port))) {
+  log.error('store-api', 'error passing given port, using 6483');
+  commander.port = 6483;
+}
 
 require('promise/lib/rejection-tracking').enable();
 
@@ -408,8 +415,8 @@ require('./lib/forms-watcher')({
         form.file, form.title);
   });
 
-  app.listen('6483');
-  log.info('CRUD API instance now listening on 6483');
+  app.listen(commander.port);
+  log.info('store-api', 'CRUD API instance now listening on', commander.port);
 }).catch(function(err) {
   log.error(err.message, error.stack);
 });
