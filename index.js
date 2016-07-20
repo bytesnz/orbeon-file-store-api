@@ -67,7 +67,8 @@ app.get('/crud/orbeon/builder/data/:id/data.xml', function getForm(req, res, nex
 });
 
 // Get published form
-app.get('/crud/:app/:form/form/form.xml', function getForm(req, res, next) {
+app.get('/crud/:app/:form/form/form.xhtml',
+    function getPublishedForm(req, res, next) {
   // Check id is in forms
   log.silly('request for published form', req.params);
   
@@ -75,18 +76,19 @@ app.get('/crud/:app/:form/form/form.xml', function getForm(req, res, next) {
     // Look up form id
     var id = forms.getFormId(req.params.app, req.params.form)
     if (forms.forms[id]) {
-      log.verbose('form exist', forms.forms[id]);
+      log.verbose('getPublishedForm', 'form exist', forms.forms[id]);
       resolve();
     } else {
       reject();
     }
   })).then(function() {
     // Check if published file exist
-    var publishedFile = path.join(pubFolder, form['application-name'],
-        form['form-name'], 'form', 'form.xhtml');
+    var publishedFile = path.join(pubFolder, req.params.app,
+        req.params.form, 'form', 'form.xhtml');
     
     return access(publishedFile, fs.R_OK).then(function() {
-      log.warn('published form exist', req.params.app, req.params.form);
+      log.info('getPublishedForm', 'published form exist', req.params.app,
+          req.params.form);
       res.sendFile(publishedFile, next);
       return Promise.resolve();
     }, function (err) {
@@ -100,9 +102,15 @@ app.get('/crud/:app/:form/form/form.xml', function getForm(req, res, next) {
         return Promise.resolve();
       }
     });
-  }).catch(function(err) {
-    log.warn('published form no exist', req.params.app, req.params.form);
+  }, function(err) {
+    log.warn('getPublishedForm', 'published form no exist', req.params.app,
+        req.params.form);
     res.status(404);
+    next();
+  }).catch(function(err) {
+    log.error('getPublishedForm', err.message);
+    log.error('getPublishedForm', err.stack);
+    res.status(500);
     next();
   });
 });
