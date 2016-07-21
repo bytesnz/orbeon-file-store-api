@@ -160,7 +160,7 @@ app.delete('/crud/orbeon/builder/data/:id/data.xml', function getForm(req, res, 
   }
 });
 
-// Form builder (form draft) handling
+// Form builder (form draft) list/search handling
 app.post('/search/orbeon/builder', function handleBuilderSearch(req, res, next) {
   xml2js.parseString(req.body, function parsedBuilderSearch(err, result) {
     if (err) {
@@ -208,7 +208,7 @@ app.post('/search/orbeon/builder', function handleBuilderSearch(req, res, next) 
         }, i;
 
         for (i = 0; i < order.length; i++) {
-          if (order[i].date > data.date) {
+          if (order[i].date < data.date) {
             break;
           }
         }
