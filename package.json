@@ -1,6 +1,6 @@
 {
   "name": "orbeon-file-crud",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "description": "CRUD-based persistence layer for Orbeon for storing forms on the file system",
   "main": "index.js",
   "scripts": {
@@ -10,12 +10,12 @@
   "license": "ISC",
   "dependencies": {
     "body-parser": "^1.14.2",
-    "express": "^4.14.0",
-    "xml2js": "^0.4.17",
     "commander": "^2.9.0",
-    "npmlog": "^4.0.0",
+    "express": "^4.14.0",
     "jsonpath-plus": "^0.15.0",
     "mkdirp-promise": "^2.0.0",
-    "promise": "^7.1.1"
+    "npmlog": "^4.0.0",
+    "promise": "^7.1.1",
+    "xml2js": "^0.4.17"
   }
 }

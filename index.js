@@ -8,6 +8,8 @@ var util = require('util');
 var mkdirp = require('mkdirp-promise');
 var process = require('process');
 var log = require('npmlog');
+var prettyData = require('./pretty-data').pd;
+
 
 var commander = require('commander')
   .option('-d, --debug', 'Debug logging')
@@ -346,7 +348,7 @@ app.put('/crud/orbeon/builder/data/:id/data.xml', function saveForm(req, res, ne
 
       log.info('form', metadata['application-name'] + '/'
           + metadata['form-name'], 'saved (' + req.params.id + ')');
-      return writeFile(formPath, req.body);
+      return writeFile(formPath, prettyData.xml(req.body, 4));
     }).then(function() {
       res.status(201).end();
     });
@@ -392,7 +394,7 @@ app.put('/crud/:app/:form/form/form.xhtml', function saveForm(req, res, next) {
       // TODO do we need to check all the metadata etc?
       log.info('form', req.params.app + '/'
           + req.params.form, 'published (' + req.query.document + ')');
-      return writeFile(publishedFile, req.body);
+      return writeFile(publishedFile, prettyData.xml(req.body, 4));
     }).then(function() {
       res.status(201).end();
     });
